@@ -66,12 +66,14 @@ func (g *fakeFactoryGenerator) GenerateType(c *generator.Context, t *types.Type,
 	klog.V(5).Info("processing type ", t)
 
 	m := map[string]interface{}{
-		"factoryKey": c.Universe.Type(types.Name{Package: g.factoryInjectionPkg, Name: "Key"}),
-		"factoryGet": c.Universe.Function(types.Name{Package: g.factoryInjectionPkg, Name: "Get"}),
-		"clientGet":  c.Universe.Function(types.Name{Package: g.fakeClientInjectionPkg, Name: "Get"}),
+		"factoryKey":      c.Universe.Type(types.Name{Package: g.factoryInjectionPkg, Name: "Key"}),
+		"factoryLabelKey": c.Universe.Type(types.Name{Package: g.factoryInjectionPkg, Name: "LabelKey"}),
+		"factoryGet":      c.Universe.Function(types.Name{Package: g.factoryInjectionPkg, Name: "Get"}),
+		"clientGet":       c.Universe.Function(types.Name{Package: g.fakeClientInjectionPkg, Name: "Get"}),
 		"informersNewSharedInformerFactoryWithOptions": c.Universe.Function(types.Name{Package: g.sharedInformerFactoryPackage, Name: "NewSharedInformerFactoryWithOptions"}),
 		"informersSharedInformerOption":                c.Universe.Function(types.Name{Package: g.sharedInformerFactoryPackage, Name: "SharedInformerOption"}),
 		"informersWithNamespace":                       c.Universe.Function(types.Name{Package: g.sharedInformerFactoryPackage, Name: "WithNamespace"}),
+		"informersWithTweakListOptions":                c.Universe.Function(types.Name{Package: g.sharedInformerFactoryPackage, Name: "WithTweakListOptions"}),
 		"injectionRegisterInformerFactory": c.Universe.Function(types.Name{
 			Package: "knative.dev/pkg/injection",
 			Name:    "Fake.RegisterInformerFactory",
@@ -99,9 +101,19 @@ func init() {
 
 func withInformerFactory(ctx {{.contextContext|raw}}) {{.contextContext|raw}} {
 	c := {{.clientGet|raw}}(ctx)
-	opts := make([]{{.informersSharedInformerOption|raw}}, 0, 1)
+	opts := make([]{{.informersSharedInformerOption|raw}}, 0, 2)
 	if {{.injectionHasNamespace|raw}}(ctx) {
 		opts = append(opts, {{.informersWithNamespace|raw}}({{.injectionGetNamespace|raw}}(ctx)))
+	}
+	untyped := ctx.Value({{.factoryLabelKey|raw}}{})
+	if untyped != nil {
+		label := untyped.(string)
+		opts = append(opts, {{.informersWithTweakListOptions|raw}}(func(l *metav1.ListOptions) {
+			if l == nil {
+				l = &metav1.ListOptions{}
+			}
+			l.LabelSelector = label
+		}))
 	}
 	return context.WithValue(ctx, {{.factoryKey|raw}}{},
 		{{.informersNewSharedInformerFactoryWithOptions|raw}}(c, {{.controllerGetResyncPeriod|raw}}(ctx), opts...))
