@@ -21,6 +21,7 @@ package factory
 import (
 	context "context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	informers "k8s.io/client-go/informers"
 	client "knative.dev/pkg/client/injection/kube/client"
 	controller "knative.dev/pkg/controller"
@@ -34,13 +35,25 @@ func init() {
 
 // Key is used as the key for associating information with a context.Context.
 type Key struct{}
+type LabelKey struct{}
 
 func withInformerFactory(ctx context.Context) context.Context {
 	c := client.Get(ctx)
-	opts := make([]informers.SharedInformerOption, 0, 1)
+	opts := make([]informers.SharedInformerOption, 0, 2)
 	if injection.HasNamespaceScope(ctx) {
 		opts = append(opts, informers.WithNamespace(injection.GetNamespaceScope(ctx)))
 	}
+	untyped := ctx.Value(LabelKey{})
+	if untyped != nil {
+		label := untyped.(string)
+		opts = append(opts, informers.WithTweakListOptions(func(l *metav1.ListOptions) {
+			if l == nil {
+				l = &metav1.ListOptions{}
+			}
+			l.LabelSelector = label
+		}))
+	}
+
 	return context.WithValue(ctx, Key{},
 		informers.NewSharedInformerFactoryWithOptions(c, controller.GetResyncPeriod(ctx), opts...))
 }

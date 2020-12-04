@@ -21,6 +21,7 @@ package fake
 import (
 	context "context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	informers "k8s.io/client-go/informers"
 	fake "knative.dev/pkg/client/injection/kube/client/fake"
 	factory "knative.dev/pkg/client/injection/kube/informers/factory"
@@ -39,6 +40,16 @@ func withInformerFactory(ctx context.Context) context.Context {
 	opts := make([]informers.SharedInformerOption, 0, 1)
 	if injection.HasNamespaceScope(ctx) {
 		opts = append(opts, informers.WithNamespace(injection.GetNamespaceScope(ctx)))
+	}
+	untyped := ctx.Value(factory.LabelKey{})
+	if untyped != nil {
+		label := untyped.(string)
+		opts = append(opts, informers.WithTweakListOptions(func(l *metav1.ListOptions) {
+			if l == nil {
+				l = &metav1.ListOptions{}
+			}
+			l.LabelSelector = label
+		}))
 	}
 	return context.WithValue(ctx, factory.Key{},
 		informers.NewSharedInformerFactoryWithOptions(c, controller.GetResyncPeriod(ctx), opts...))
